@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "@/components/ui/sonner"
 import "./globals.css";
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,10 +26,28 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <script
+          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&loading=async&libraries=maps&v=beta`} defer>
+        </script>
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <Toaster
+          richColors
+          toastOptions={{
+            style: {
+              borderRadius: '10px',
+              background: 'rgba(30, 30, 30, 0.95)',
+              color: '#FFF8DC',
+              fontSize: '0.75em',
+              border: '1px solid rgba(255, 248, 220, 0.2)',
+              boxShadow: '0 4px 24px 0 rgba(0,0,0,0.18)'
+            }
+          }}
+        />
       </body>
     </html>
   );
