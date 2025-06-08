@@ -293,7 +293,7 @@ export default function Game() {
                 </TabsList>
                 <TabsContent forceMount className={`${tab === "create" ? "mt-4" : "hidden mt-4"}`} value="create">
                     {location && location.latitude && location.longitude ? (
-                        <StreetView latitude={47.1763891} longitude={-122.4211769} />
+                        <StreetView latitude={location.latitude} longitude={location.longitude} />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center bg-black/20 rounded-lg">
                             <div className="text-amber-200/80 text-center">
