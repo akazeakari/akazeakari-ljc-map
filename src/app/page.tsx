@@ -109,8 +109,10 @@ export default function Home() {
                                 onClick={() => {
                                     setMarkers([])
                                     setClosestLocationInfo(null)
-                                    toast.loading('位置正在生成中...')
-                                    RandomLocation().then(location => {
+                                    toast('位置正在生成中...', {
+                                        duration: 1000
+                                    })
+                                    RandomLocation({region: selectedRegion}).then(location => {
                                         setLocation(location)
                                         if (location) {
                                             router.push('/game')

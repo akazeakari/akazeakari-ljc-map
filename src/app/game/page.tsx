@@ -25,41 +25,83 @@ function StreetView({ latitude, longitude }: { latitude: number, longitude: numb
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
-        if (!mapRef.current) {
-            setError('Google Street View 未載入')
+        // 检查API密钥是否配置
+        const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+        if (!apiKey) {
+            setError('Google Maps API 密钥未配置，請聯繫管理員')
+            console.error('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set')
             return
         }
 
-        const panorama = new window.google.maps.StreetViewPanorama(
-            mapRef.current,
-            {
-                position: { lat: latitude, lng: longitude },
-                addressControlOptions: {
-                    position: window.google.maps.ControlPosition.BOTTOM_CENTER,
-                },
-                linksControl: false,
-                panControl: false,
-                enableCloseButton: false,
-                addressControl: false,
-                clickToGo: false,
-            }
-        )
+        // 验证经纬度是否为有效数字
+        console.log('Street View coordinates:', latitude, longitude)
+        if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
+            setError('無效的經緯度座標')
+            return
+        }
 
-        // 添加載入狀態監聽
-        panorama.addListener('status_changed', () => {
-            const status = panorama.getStatus()
-            if (status === window.google.maps.StreetViewStatus.OK) {
-                setIsLoaded(true)
-                setError(null)
-            } else {
-                setError('無法載入街景，請稍後重試')
-                setIsLoaded(false)
-            }
-        })
+        if (!mapRef.current) {
+            setError('Google Street View 容器未就緒')
+            return
+        }
 
-        return () => {
-            // 清理監聽器
-            window.google.maps.event.clearInstanceListeners(panorama)
+        // 检查 Google Maps API 是否已加载
+        if (!window.google || !window.google.maps) {
+            setError('Google Maps API 未載入，請重新整理頁面')
+            console.error('Google Maps API not loaded')
+            return
+        }
+
+        // 检查街景服务是否可用
+        if (!window.google.maps.StreetViewPanorama) {
+            setError('Google Street View 服務不可用')
+            console.error('Street View Panorama not available')
+            return
+        }
+
+        try {
+            const panorama = new window.google.maps.StreetViewPanorama(
+                mapRef.current,
+                {
+                    position: { lat: latitude, lng: longitude },
+                    addressControlOptions: {
+                        position: window.google.maps.ControlPosition.BOTTOM_CENTER,
+                    },
+                    linksControl: false,
+                    panControl: false,
+                    enableCloseButton: false,
+                    addressControl: false,
+                    clickToGo: false,
+                    zoomControl: true,
+                    fullscreenControl: false,
+                }
+            )
+
+            // 添加載入狀態監聽
+            panorama.addListener('status_changed', () => {
+                const status = panorama.getStatus()
+                console.log('Street View status:', status)
+                if (status === window.google.maps.StreetViewStatus.OK) {
+                    setIsLoaded(true)
+                    setError(null)
+                } else if (status === window.google.maps.StreetViewStatus.ZERO_RESULTS) {
+                    setError('此位置沒有可用的街景圖像')
+                    setIsLoaded(false)
+                } else {
+                    setError('無法載入街景，請稍後重試')
+                    setIsLoaded(false)
+                }
+            })
+
+            return () => {
+                // 清理監聽器
+                if (window.google && window.google.maps && window.google.maps.event) {
+                    window.google.maps.event.clearInstanceListeners(panorama)
+                }
+            }
+        } catch (error) {
+            console.error('Error creating Street View panorama:', error)
+            setError('建立街景視圖時發生錯誤')
         }
     }, [latitude, longitude])
 
@@ -68,11 +110,14 @@ function StreetView({ latitude, longitude }: { latitude: number, longitude: numb
             {!isLoaded && (
                 <div className="w-full h-full flex items-center justify-center">
                     {error ? (
-                        <p className="text-red-400">{error}</p>
+                        <div className="text-center">
+                            <p className="text-red-400 mb-2">{error}</p>
+                            <p className="text-amber-200/60 text-sm">請檢查網路連接或重新整理頁面</p>
+                        </div>
                     ) : (
                         <div className="flex flex-col items-center gap-2">
                             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-300"></div>
-                            <p className="text-amber-200/80">載入中...</p>
+                            <p className="text-amber-200/80">載入街景中...</p>
                         </div>
                     )}
                 </div>
@@ -156,7 +201,15 @@ export default function Game() {
     const [hint, setHint] = useState<string | null>(null);
     const router = useRouter()
 
-    console.log(location)
+    // 添加调试信息
+    useEffect(() => {
+        console.log('=== 調試信息 ===')
+        console.log('API Key:', process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? '已配置' : '未配置')
+        console.log('Google Maps API:', window.google ? '已載入' : '未載入')
+        console.log('Street View API:', window.google?.maps?.StreetViewPanorama ? '可用' : '不可用')
+        console.log('Location:', location)
+        console.log('================')
+    }, [location])
 
     // 計算最近的標記點和距離
     const getClosestMarker = useCallback(() => {
@@ -239,7 +292,16 @@ export default function Game() {
                     </TabsTrigger>
                 </TabsList>
                 <TabsContent forceMount className={`${tab === "create" ? "mt-4" : "hidden mt-4"}`} value="create">
-                    <StreetView latitude={location?.latitude || 0} longitude={location?.longitude || 0} /> 
+                    {location && location.latitude && location.longitude ? (
+                        <StreetView latitude={47.1763891} longitude={-122.4211769} />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-black/20 rounded-lg">
+                            <div className="text-amber-200/80 text-center">
+                                <div className="animate-pulse rounded-full h-8 w-8 bg-amber-300/20 mx-auto mb-2"></div>
+                                <p>等待位置資料載入...</p>
+                            </div>
+                        </div>
+                    )}
                 </TabsContent>
                 <TabsContent forceMount className={`${tab === "solve" ? "mt-4" : "hidden mt-4"}`} value="solve">
                     <MapView
