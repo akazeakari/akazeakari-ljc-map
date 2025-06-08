@@ -21,14 +21,7 @@ export interface GeoLocation {
     postcode?: string;    // 邮政编码（可选）
 }
 
-interface GeoJSONFeature {
-    type: string;
-    geometry: {
-        type: string;
-        coordinates: number[][][];
-    };
-    properties: Record<string, unknown>;
-}
+
 
 /**
  * 生成随机地理位置
