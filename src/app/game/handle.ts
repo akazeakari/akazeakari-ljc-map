@@ -1,5 +1,6 @@
 import * as turf from '@turf/turf';
 import { toast } from 'sonner';
+import type { Feature, Polygon, MultiPolygon } from 'geojson';
 
 /**
  * 地理位置信息接口
@@ -19,6 +20,16 @@ export interface GeoLocation {
     stateDistrict?: string; // 州/省辖区（可选）
     postcode?: string;    // 邮政编码（可选）
 }
+
+interface GeoJSONFeature {
+    type: string;
+    geometry: {
+        type: string;
+        coordinates: number[][][];
+    };
+    properties: Record<string, unknown>;
+}
+
 /**
  * 生成随机地理位置
  * 通过GeoJSON数据在陆地区域内随机生成一个点，并获取该点的详细地址信息
@@ -29,77 +40,106 @@ export async function RandomLocation(): Promise<GeoLocation | null> {
         // 获取陆地GeoJSON数据
         const response = await fetch('/data/land.geojson');
         if (!response.ok) {
-            toast.error('无法加载地理数据');
+            const errorMessage = `无法加载地理数据: ${response.status} ${response.statusText}`;
+            console.error(errorMessage);
+            toast.error(errorMessage);
             return null;
         }
 
         const geojson = await response.json();
 
         if (!geojson.features || geojson.features.length === 0) {
-            toast.error('GeoJSON数据中没有多边形');
+            const errorMessage = 'GeoJSON数据中没有多边形';
+            console.error(errorMessage, geojson);
+            toast.error(errorMessage);
             return null;
         }
 
-        let landPolygon: any;
-        if (geojson.features.length === 1) {
-            landPolygon = geojson.features[0];
-        } else if (geojson.features.length > 1) {
-            // 合并所有多边形为MultiPolygon
-            const allPolygons = geojson.features.map((f: any) => f.geometry);
-            landPolygon = {
-                type: "Feature",
-                properties: {},
-                geometry: {
-                    type: "MultiPolygon",
-                    coordinates: allPolygons
-                        .map((g: any) => g.type === "Polygon" ? [g.coordinates] : g.coordinates)
-                        .flat()
-                }
-            };
+        let landPolygon: Feature<Polygon | MultiPolygon>;
+        try {
+            if (geojson.features.length === 1) {
+                landPolygon = geojson.features[0] as Feature<Polygon | MultiPolygon>;
+            } else if (geojson.features.length > 1) {
+                // 合并所有多边形为MultiPolygon
+                const allPolygons = geojson.features.map((f: Feature<Polygon | MultiPolygon>) => f.geometry);
+                landPolygon = {
+                    type: "Feature" as const,
+                    properties: {},
+                    geometry: {
+                        type: "MultiPolygon" as const,
+                        coordinates: allPolygons
+                            .map((g: Polygon | MultiPolygon) => g.type === "Polygon" ? [g.coordinates] : g.coordinates)
+                            .flat()
+                    }
+                };
+            }
+        } catch (error) {
+            const errorMessage = '处理GeoJSON多边形时发生错误';
+            console.error(errorMessage, error);
+            toast.error(errorMessage);
+            return null;
         }
 
         // 获取边界框
-        const bbox = turf.bbox(landPolygon);
+        let bbox;
+        try {
+            bbox = turf.bbox(landPolygon!);
+        } catch (error) {
+            const errorMessage = '计算边界框时发生错误';
+            console.error(errorMessage, error);
+            toast.error(errorMessage);
+            return null;
+        }
 
         // 最多尝试5次生成有效位置，避免无限循环
         for (let attempt = 0; attempt < 5; attempt++) {
-            // 每次生成更多候选点以提高成功率
-            const candidatePoints = turf.randomPoint(100, { bbox });
-            
-            // 筛选出在陆地上的点
-            const validPoints = candidatePoints.features.filter(point => {
-                try {
-                    return turf.booleanPointInPolygon(point, landPolygon);
-                } catch (error) {
-                    return false;
+            try {
+                // 每次生成更多候选点以提高成功率
+                const candidatePoints = turf.randomPoint(100, { bbox });
+                
+                // 筛选出在陆地上的点
+                const validPoints = candidatePoints.features.filter(point => {
+                    try {
+                        return turf.booleanPointInPolygon(point, landPolygon!);
+                    } catch (error) {
+                        console.warn('检查点是否在多边形内时发生错误:', error);
+                        return false;
+                    }
+                });
+
+                if (validPoints.length === 0) {
+                    console.warn(`第${attempt + 1}次尝试未找到有效点`);
+                    continue; // 继续下一次尝试
                 }
-            });
 
-            if (validPoints.length === 0) {
-                continue; // 继续下一次尝试
+                // 随机选择一个有效点
+                const randomIndex = Math.floor(Math.random() * validPoints.length);
+                const selectedPoint = validPoints[randomIndex];
+                const [lng, lat] = selectedPoint.geometry.coordinates;
+
+                // 只进行一次API调用，如果失败就尝试下一批点
+                const location = await CityLevelLocation(lat, lng);
+                if (location) {
+                    toast.dismiss(); // 清除loading提示
+                    return location;
+                }
+
+                console.warn(`第${attempt + 1}次尝试未能获取有效地址信息`);
+                // 添加短暂延迟避免API频率限制
+                await new Promise(resolve => setTimeout(resolve, 200));
+            } catch (error) {
+                console.error(`第${attempt + 1}次尝试时发生错误:`, error);
             }
-
-            // 随机选择一个有效点
-            const randomIndex = Math.floor(Math.random() * validPoints.length);
-            const selectedPoint = validPoints[randomIndex];
-            const [lng, lat] = selectedPoint.geometry.coordinates;
-
-            // 只进行一次API调用，如果失败就尝试下一批点
-            const location = await CityLevelLocation(lat, lng);
-            if (location) {
-                toast.dismiss(); // 清除loading提示
-                return location;
-            }
-
-            // 添加短暂延迟避免API频率限制
-            await new Promise(resolve => setTimeout(resolve, 200));
         }
 
-        toast.error('未能生成有效的地址信息');
+        const errorMessage = '未能生成有效的地址信息';
+        console.error(errorMessage);
+        toast.error(errorMessage);
         return null;
     } catch (error) {
-        console.error('生成随机位置时发生错误:', error);
-        toast.error('生成随机位置时发生错误');
+        const errorMessage = '生成随机位置时发生错误';
+        console.error(errorMessage, error);
+        toast.error(errorMessage);
         return null;
     }
 }

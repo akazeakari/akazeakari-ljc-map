@@ -9,14 +9,13 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { atom, useAtom } from "jotai"
+import { useAtom } from "jotai"
 import { useRouter } from "next/navigation"
-import { GeoLocation, RandomLocation } from "./game/handle";
-import { atomWithStorage } from 'jotai/utils'
+import { RandomLocation } from "./game/handle";
 import { toast } from "sonner";
-import { markersAtom, closestLocationInfoAtom } from "./game/page";
-export const selectedRegionAtom = atom<string>("All")
-export const locationAtom = atomWithStorage<GeoLocation | null>('location', null)
+import { markersAtom, closestLocationInfoAtom } from "./game/atoms";
+import { selectedRegionAtom, locationAtom } from "./atom";
+import Image from 'next/image'
 
 export default function Home() {
     const router = useRouter()
@@ -28,9 +27,9 @@ export default function Home() {
     });
 
     const [selectedRegion, setSelectedRegion] = useAtom(selectedRegionAtom)
-    const [markers, setMarkers] = useAtom(markersAtom)
-    const [location, setLocation] = useAtom(locationAtom)
-    const [closestLocationInfo, setClosestLocationInfo] = useAtom(closestLocationInfoAtom);
+    const [, setMarkers] = useAtom(markersAtom)
+    const [, setLocation] = useAtom(locationAtom)
+    const [, setClosestLocationInfo] = useAtom(closestLocationInfoAtom);
 
     useEffect(() => {
         const timers = [
@@ -58,9 +57,11 @@ export default function Home() {
                     >
                         歡迎來到 AveMujica 的世界
                     </p>
-                    <img
+                    <Image
                         src="/images/bg_loading_title.png"
                         alt="Avemujica"
+                        width={500}
+                        height={300}
                         className={`transition-all duration-1000 ease-in-out ${curtainState.isImageVisible ? "opacity-100 scale-100" : "opacity-0 scale-95"
                             }`}
                     />
@@ -71,9 +72,11 @@ export default function Home() {
             <div className="page-bg w-full h-screen flex items-center justify-center">
                 <div className="flex flex-col items-center w-full max-w-lg sm:max-w-xl md:max-w-2xl mx-auto px-2 sm:px-4">
                     {/* 頂部裝飾 */}
-                    <img 
+                    <Image 
                         src="/images/box_t.svg" 
                         alt="裝飾性頂部邊框" 
+                        width={500}
+                        height={100}
                         className="scale-150 sm:scale-100 md:scale-80 mt-2 mb-2"
                         style={{ maxWidth: "100%", height: "auto" }}
                     />
@@ -109,7 +112,11 @@ export default function Home() {
                                     toast.loading('位置正在生成中...')
                                     RandomLocation().then(location => {
                                         setLocation(location)
-                                        router.push('/game')
+                                        if (location) {
+                                            router.push('/game')
+                                        } else {
+                                            toast.error('位置生成失敗，請稍後再試')
+                                        }
                                     })
                                 }}
                             >
@@ -140,9 +147,11 @@ export default function Home() {
                     </div>
                     
                     {/* 底部裝飾 */}
-                    <img 
+                    <Image 
                         src="/images/box_b.svg" 
                         alt="裝飾性底部邊框" 
+                        width={500}
+                        height={100}
                         className="scale-150 sm:scale-100 md:scale-80 mt-2 mb-2"
                         style={{ maxWidth: "100%", height: "auto" }}
                     />

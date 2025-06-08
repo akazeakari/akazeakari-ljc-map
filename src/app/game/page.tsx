@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Map, Marker } from '@vis.gl/react-maplibre';
-import { atom, useAtom, useAtomValue } from 'jotai'
-import { atomWithStorage } from 'jotai/utils'
+import { useAtom } from 'jotai'
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -15,12 +14,10 @@ import {
     DialogTitle,
     DialogTrigger,
   } from "@/components/ui/dialog"
-import { selectedRegionAtom, locationAtom } from '../page'
+import { selectedRegionAtom, locationAtom, markersAtom, closestLocationInfoAtom } from '@/app/atom'
 import { useRouter } from 'next/navigation'
 import { CityLevelLocation, generateLocationHint } from './handle';
-
-export const markersAtom = atomWithStorage<Array<{ lat: number, lng: number }>>('markers', []);
-export const closestLocationInfoAtom = atomWithStorage<any>('closestLocationInfo', null);
+import Image from 'next/image'
 
 function StreetView({ latitude, longitude }: { latitude: number, longitude: number }) {
     const mapRef = useRef<HTMLDivElement>(null)
@@ -108,11 +105,11 @@ function MapView({ latitude, longitude }: { latitude: number, longitude: number 
         };
     }, [countdown]);
 
-    const onMove = useCallback((evt: any) => {
+    const onMove = useCallback((evt: { viewState: { latitude: number; longitude: number; zoom: number } }) => {
         setViewState(evt.viewState);
     }, []);
 
-    const handleMapClick = useCallback((evt: any) => {
+    const handleMapClick = useCallback((evt: { lngLat: { lat: number; lng: number } }) => {
         const currentTime = Date.now();
         if (currentTime - lastMarkerTime < 1000) {
             const remainingTime = Math.ceil((1000 - (currentTime - lastMarkerTime)) / 1000);
@@ -124,7 +121,7 @@ function MapView({ latitude, longitude }: { latitude: number, longitude: number 
         const { lat, lng } = evt.lngLat;
         setMarkers(prev => [...prev, { lat, lng }]);
         setLastMarkerTime(currentTime);
-    }, [setMarkers, lastMarkerTime, toast]);
+    }, [lastMarkerTime, setMarkers]);
 
     return (
         <Map
@@ -203,8 +200,8 @@ export default function Game() {
                     lat: closestMarker.lat,
                     lng: closestMarker.lng
                 });
-            } catch (error) {
-                console.error('獲取最近點地點資訊失敗:', error);
+            } catch {
+                console.error('獲取最近點地點資訊失敗:');
             }
         };
         
@@ -242,7 +239,7 @@ export default function Game() {
                     </TabsTrigger>
                 </TabsList>
                 <TabsContent forceMount className={`${tab === "create" ? "mt-4" : "hidden mt-4"}`} value="create">
-                    <StreetView latitude={42.345573} longitude={-71.098326} /> 
+                    <StreetView latitude={location?.latitude || 0} longitude={location?.longitude || 0} /> 
                 </TabsContent>
                 <TabsContent forceMount className={`${tab === "solve" ? "mt-4" : "hidden mt-4"}`} value="solve">
                     <MapView
@@ -330,7 +327,7 @@ export default function Game() {
                                             }
                                         }}
                                     >
-                                        <img src="/icon.svg" alt="提交答案" className="w-4 h-4 mr-2" />
+                                        <Image src="/icon.svg" alt="提交答案" width={16} height={16} className="mr-2" />
                                         提交答案
                                     </Button>
                                 </DialogTrigger>
@@ -475,7 +472,7 @@ export default function Game() {
                                             }
                                         }}
                                     >
-                                        <img src="/icon.svg" alt="獲取提示" className="w-4 h-4 mr-2" />
+                                        <Image src="/icon.svg" alt="獲取提示" width={16} height={16} className="mr-2" />
                                         獲取提示
                                     </Button>
                                 </DialogTrigger>
@@ -498,7 +495,7 @@ export default function Game() {
                                 className="text-amber-200/80 border-amber-300/50 bg-transparent sm:px-6 sm:py-4 rounded-lg sm:w-full  text-sm hover:bg-amber-300/20 hover:text-amber-100/90 transition-all duration-200"
                                 onClick={handleReset}
                             >
-                                <img src="/icon.svg" alt="重新開始" className="w-4 h-4 mr-2" />
+                                <Image src="/icon.svg" alt="重新開始" width={16} height={16} className="mr-2" />
                                 重新開始
                             </Button>
                         </div>
